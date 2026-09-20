@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Premium POS System</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="logo">ShopManager<span>.</span></div>
+        <div class="nav-links">
+            <button id="btn-pos" class="active" onclick="switchView('pos')">Storefront</button>
+            <button id="btn-admin" onclick="switchView('admin')">Admin Panel</button>
+            <button id="btn-reports" onclick="switchView('reports')">Reports</button>
+            <button id="btn-checkout" class="cart-btn" onclick="switchView('checkout')">
+                🛒 Cart <span id="cart-badge" class="badge">0</span>
+            </button>
+        </div>
+    </nav>
+
+    <main>
+        <!-- 1. STOREFRONT VIEW -->
+        <section id="view-pos" class="view-section active">
+            
+            <!-- Live Search Bar -->
+            <div class="search-bar-container">
+                <svg class="search-icon" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                <input type="text" id="search-input" placeholder="Search inventory..." onkeyup="handleSearch(this.value)">
+            </div>
+
+            <!-- Filter Toolbar (Categories + Funnel Dropdown) -->
+            <div class="filter-toolbar">
+                <div class="category-filters" id="category-filters">
+                    <!-- Injected via JS -->
+                </div>
+                
+                <div class="tag-dropdown">
+                    <button class="filter-icon-btn" onclick="toggleTagDropdown()" title="Filter by Tag">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
+                    </button>
+                    <div id="tag-dropdown-menu" class="dropdown-content">
+                        <div class="dropdown-header">Filter by:</div>
+                        <div id="tag-list">
+                            <!-- Tags injected via JS -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Full Width Product Grid -->
+            <div class="product-grid full-width" id="product-grid">
+                <!-- Products injected via JS -->
+            </div>
+        </section>
+
+        <!-- 2. NEW CHECKOUT VIEW -->
+        <section id="view-checkout" class="view-section">
+            <div class="checkout-container">
+                <div class="checkout-header">
+                    <h2>Review Order</h2>
+                    <button class="back-btn" onclick="switchView('pos')">← Back to Store</button>
+                </div>
+                
+                <div class="checkout-list" id="checkout-list">
+                    <!-- Cart items injected via JS -->
+                </div>
+
+                <div class="checkout-summary">
+                    <div class="payment-method">
+                        <label>Payment Method:</label>
+                        <select id="payment-type">
+                            <option value="cash">Cash</option>
+                            <option value="transfer">Transfer</option>
+                            <option value="pos">POS Terminal</option>
+                        </select>
+                    </div>
+                    <div class="total-row">
+                        <span>Grand Total:</span>
+                        <span id="checkout-total">₦0.00</span>
+                    </div>
+                    <button class="checkout-btn" onclick="completeCheckout()">Complete Sale</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- REPORTS VIEW -->
+        <section id="view-reports" class="view-section">
+            <div class="reports-header">
+                <div class="month-picker">
+                    <input type="month" id="filter-month" onchange="filterReports()">
+                </div>
+                <button class="analysis-btn" onclick="toggleAnalytics()">Analysis</button>
+            </div>
+
+            <div class="reports-overview">
+                <span class="overview-label">In:</span> <span id="report-revenue">₦0.00</span>
+                <span class="overview-label profit-label">Profit:</span> <span id="report-profit">₦0.00</span>
+            </div>
+
+            <!-- The Transaction Feed (Default View) -->
+            <div id="transaction-feed" class="transaction-feed">
+                <!-- Injected via JS -->
+            </div>
+
+            <!-- The Analytics View (Hidden by default) -->
+            <div id="analytics-view" class="analytics-view" style="display: none;">
+                <div class="chart-card">
+                    <div class="chart-header">
+                        <h3>Daily Income</h3>
+                        <select id="chart-type-toggle" onchange="updateBarChart()">
+                            <option value="revenue">Revenue</option>
+                            <option value="profit">Gross Profit</option>
+                        </select>
+                    </div>
+                    <canvas id="barChart"></canvas>
+                </div>
+                <div class="chart-card">
+                    <h3>Payment Methods</h3>
+                    <!-- The wrapper div to restrict size -->
+                    <div class="pie-chart-container">
+                        <canvas id="pieChart"></canvas>
+                    </div>
+                </div>
+        </section>
+
+        <!-- Receipt Modal (For the "View" button) -->
+        <div id="receipt-modal" class="modal">
+            <div class="modal-content receipt-card">
+                <div class="modal-header">
+                    <h2>Sale Details</h2>
+                    <span class="close-btn" onclick="closeModal('receipt-modal')">&times;</span>
+                </div>
+                <div class="modal-body" id="receipt-details">
+                    <!-- Injected via JS -->
+                </div>
+            </div>
+        </div>
+
+        <!-- 3. ADMIN VIEW -->
+        <section id="view-admin" class="view-section">
+            <div class="admin-header">
+                <h2>Inventory Management</h2>
+                <button class="add-btn" onclick="openProductModal()">+ Add New Product</button>
+            </div>
+            <div class="table-container">
+                <table class="inventory-table">
+                    <thead>
+                        <tr>
+                            <th>Product Name</th>
+                            <th>Category</th>
+                            <th>Cost (₦)</th>
+                            <th>Price (₦)</th>
+                            <th>In Stock</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="inventory-list"></tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+
+    <!-- NEW: Admin PIN Verification Modal -->
+    <div id="pin-modal" class="modal">
+        <div class="modal-content" style="max-width: 320px; text-align: center;">
+            <div class="modal-header" style="justify-content: center; position: relative;">
+                <h2 style="margin: 0;">Manager Access</h2>
+                <span class="close-btn" style="position: absolute; right: 0; top: -5px;" onclick="closeModal('pin-modal')">&times;</span>
+            </div>
+            <div class="modal-body">
+                <p style="color: var(--text-muted); margin-bottom: 1.5rem; font-size: 0.9rem;">Enter 4-digit PIN to continue</p>
+                <input type="password" id="admin-pin-input" placeholder="****" maxlength="4" style="text-align: center; font-size: 2rem; letter-spacing: 0.8rem; padding: 1rem; border: 1px solid var(--border); border-radius: var(--radius); width: 100%; margin-bottom: 1.5rem; background: #f8fafc;" onkeyup="checkPin(event)">
+                <button class="save-btn" style="margin-top: 0;" onclick="verifyPin()">Unlock</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Admin Modals -->
+    <div id="product-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modal-title">Add New Product</h2>
+                <span class="close-btn" onclick="closeModal('product-modal')">&times;</span>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="product-id">
+                <div class="form-group">
+                    <label>Product Name</label>
+                    <input type="text" id="product-name" placeholder="e.g., Electric Air Fryer">
+                </div>
+                <div class="form-group">
+                    <label>Category</label>
+                    <input type="text" id="product-category" placeholder="e.g., Appliances">
+                </div>
+                <div class="form-group">
+                    <label>Tags (Comma separated)</label>
+                    <input type="text" id="product-tags" placeholder="e.g., electricals, new, bulk">
+                </div>
+                <div class="form-group">
+                    <label>Product Image (Optional)</label>
+                    <input type="file" id="product-image-file" accept="image/*">
+                    <input type="hidden" id="product-image-base64">
+                </div>
+                <div class="form-group row-group">
+                    <div>
+                        <label>Cost Price (₦)</label>
+                        <input type="number" id="product-cost" placeholder="0">
+                    </div>
+                    <div>
+                        <label>Selling Price (₦)</label>
+                        <input type="number" id="product-price" placeholder="0">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Initial Stock</label>
+                    <input type="number" id="product-stock" placeholder="0">
+                </div>
+                <button class="save-btn" onclick="saveProduct()">Save Product</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Product Image Modal -->
+    <div id="image-view-modal" class="modal">
+        <div class="modal-content" style="text-align: center; background: transparent; box-shadow: none;">
+            <span class="close-btn" style="color: white; font-size: 2rem; position: absolute; top: 1rem; right: 2rem;" onclick="closeModal('image-view-modal')">&times;</span>
+            <img id="preview-image" src="" alt="Product" style="max-width: 100%; max-height: 80vh; border-radius: 8px; box-shadow: 0 10px 25px rgba(0,0,0,0.5);">
+            <h2 id="preview-title" style="color: white; margin-top: 1rem; text-shadow: 0 2px 4px rgba(0,0,0,0.8);"></h2>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
