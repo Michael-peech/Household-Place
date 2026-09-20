@@ -1,63 +1,22 @@
-from fastapi import FastAPI, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from flask import Flask, request, jsonify
+from flask_cors import CORS
 import sqlite3
-from typing import Dict
-from datetime import datetime
 import os
+from datetime import datetime
 
-app = FastAPI()
+app = Flask(__name__)
+CORS(app)
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"], 
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# 1. ABSOLUTE PATH: Forces the DB to be created in the exact right folder
+# Absolute pathing prevents PythonAnywhere folder permission locks
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_NAME = os.path.join(BASE_DIR, "shop.db")
 
 def init_db():
-    # Added a timeout so if it locks, it crashes with a visible error instead of freezing forever
     with sqlite3.connect(DB_NAME, timeout=5) as conn:
         c = conn.cursor()
-        
-        c.execute('''
-            CREATE TABLE IF NOT EXISTS products (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT NOT NULL,
-                price INTEGER NOT NULL,
-                stock INTEGER NOT NULL,
-                cost_price INTEGER NOT NULL,
-                category TEXT NOT NULL,
-                tags TEXT,
-                image_data TEXT
-            )
-        ''')
-        
-        c.execute('''
-            CREATE TABLE IF NOT EXISTS transactions (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                timestamp TEXT NOT NULL,
-                total_amount INTEGER NOT NULL,
-                payment_method TEXT NOT NULL
-            )
-        ''')
-        c.execute('''
-            CREATE TABLE IF NOT EXISTS transaction_items (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                transaction_id INTEGER NOT NULL,
-                product_id INTEGER NOT NULL,
-                product_name TEXT NOT NULL,
-                quantity INTEGER NOT NULL,
-                price_sold_at INTEGER NOT NULL,
-                cost_price INTEGER NOT NULL,
-                FOREIGN KEY(transaction_id) REFERENCES transactions(id)
-            )
-        ''')
+        c.execute('''CREATE TABLE IF NOT EXISTS products (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, price INTEGER NOT NULL, stock INTEGER NOT NULL, cost_price INTEGER NOT NULL, category TEXT NOT NULL, tags TEXT, image_data TEXT)''')
+        c.execute('''CREATE TABLE IF NOT EXISTS transactions (id INTEGER PRIMARY KEY AUTOINCREMENT, timestamp TEXT NOT NULL, total_amount INTEGER NOT NULL, payment_method TEXT NOT NULL)''')
+        c.execute('''CREATE TABLE IF NOT EXISTS transaction_items (id INTEGER PRIMARY KEY AUTOINCREMENT, transaction_id INTEGER NOT NULL, product_id INTEGER NOT NULL, product_name TEXT NOT NULL, quantity INTEGER NOT NULL, price_sold_at INTEGER NOT NULL, cost_price INTEGER NOT NULL, FOREIGN KEY(transaction_id) REFERENCES transactions(id))''')
         
         c.execute("SELECT COUNT(*) FROM products")
         if c.fetchone()[0] == 0:
@@ -70,7 +29,6 @@ def init_db():
             c.executemany("INSERT INTO products (name, price, stock, cost_price, category, tags, image_data) VALUES (?, ?, ?, ?, ?, ?, ?)", sample_products)
         conn.commit()
 
-# 2. LAZY LOADING: We will safely call this on the first request rather than globally during boot
 db_initialized = False
 
 def get_db():
@@ -80,100 +38,85 @@ def get_db():
         db_initialized = True
     return sqlite3.connect(DB_NAME, timeout=5)
 
-# --- Models ---
-class CartItem(BaseModel):
-    quantity: int
-    price: int  
-
-class CartPayload(BaseModel):
-    payment_method: str
-    items: Dict[int, CartItem]
-
-class ProductPayload(BaseModel):
-    name: str
-    price: int
-    stock: int
-    cost_price: int
-    category: str
-    tags: str
-    image_data: str
-
-# --- NEW: Health Check Endpoint ---
-@app.get("/")
+@app.route("/", methods=["GET"])
 def read_root():
-    return {"status": "Backend is ALIVE and running!"}
+    return jsonify({"status": "Backend is ALIVE and running natively on Flask!"})
 
-# --- API Endpoints ---
-@app.get("/api/products")
+@app.route("/api/products", methods=["GET"])
 def get_products():
     with get_db() as conn:
         conn.row_factory = sqlite3.Row
         c = conn.cursor()
         c.execute("SELECT * FROM products")
-        return [dict(row) for row in c.fetchall()]
+        return jsonify([dict(row) for row in c.fetchall()])
 
-@app.post("/api/products")
-def add_product(product: ProductPayload):
+@app.route("/api/products", methods=["POST"])
+def add_product():
+    product = request.json
     with get_db() as conn:
         c = conn.cursor()
         c.execute("INSERT INTO products (name, price, stock, cost_price, category, tags, image_data) VALUES (?, ?, ?, ?, ?, ?, ?)", 
-                  (product.name, product.price, product.stock, product.cost_price, product.category, product.tags, product.image_data))
+                  (product['name'], product['price'], product['stock'], product['cost_price'], product.get('category', ''), product.get('tags', ''), product.get('image_data', '')))
         conn.commit()
-    return {"status": "success"}
+    return jsonify({"status": "success"})
 
-@app.put("/api/products/{product_id}")
-def update_product(product_id: int, product: ProductPayload):
+@app.route("/api/products/<int:product_id>", methods=["PUT"])
+def update_product(product_id):
+    product = request.json
     with get_db() as conn:
         c = conn.cursor()
         c.execute("UPDATE products SET name = ?, price = ?, stock = ?, cost_price = ?, category = ?, tags = ?, image_data = ? WHERE id = ?",
-                  (product.name, product.price, product.stock, product.cost_price, product.category, product.tags, product.image_data, product_id))
+                  (product['name'], product['price'], product['stock'], product['cost_price'], product.get('category', ''), product.get('tags', ''), product.get('image_data', ''), product_id))
         conn.commit()
-    return {"status": "success"}
+    return jsonify({"status": "success"})
 
-@app.delete("/api/products/{product_id}")
-def delete_product(product_id: int):
+@app.route("/api/products/<int:product_id>", methods=["DELETE"])
+def delete_product(product_id):
     with get_db() as conn:
         c = conn.cursor()
         c.execute("DELETE FROM products WHERE id = ?", (product_id,))
         conn.commit()
-    return {"status": "success"}
+    return jsonify({"status": "success"})
 
-@app.post("/api/checkout")
-def checkout(payload: CartPayload):
+@app.route("/api/checkout", methods=["POST"])
+def checkout():
+    payload = request.json
     with get_db() as conn:
         c = conn.cursor()
         
-        total_amount = sum(item.price * item.quantity for item in payload.items.values())
+        items = payload.get('items', {})
+        total_amount = sum(item['price'] * item['quantity'] for item in items.values())
         timestamp = datetime.now().isoformat()
         
         c.execute("INSERT INTO transactions (timestamp, total_amount, payment_method) VALUES (?, ?, ?)",
-                  (timestamp, total_amount, payload.payment_method))
+                  (timestamp, total_amount, payload.get('payment_method')))
         transaction_id = c.lastrowid
         
-        for product_id, item in payload.items.items():
+        for product_id_str, item in items.items():
+            product_id = int(product_id_str)
             c.execute("SELECT name, cost_price, stock FROM products WHERE id = ?", (product_id,))
             product_row = c.fetchone()
             
             if not product_row:
-                raise HTTPException(status_code=400, detail=f"Product {product_id} not found")
+                return jsonify({"detail": f"Product {product_id} not found"}), 400
             
             product_name, cost_price, current_stock = product_row
             
-            if current_stock < item.quantity:
-                raise HTTPException(status_code=400, detail=f"Not enough stock for {product_name}")
+            if current_stock < item['quantity']:
+                return jsonify({"detail": f"Not enough stock for {product_name}"}), 400
             
-            c.execute("UPDATE products SET stock = stock - ? WHERE id = ?", (item.quantity, product_id))
+            c.execute("UPDATE products SET stock = stock - ? WHERE id = ?", (item['quantity'], product_id))
             
             c.execute("""
                 INSERT INTO transaction_items 
                 (transaction_id, product_id, product_name, quantity, price_sold_at, cost_price) 
                 VALUES (?, ?, ?, ?, ?, ?)
-            """, (transaction_id, product_id, product_name, item.quantity, item.price, cost_price))
+            """, (transaction_id, product_id, product_name, item['quantity'], item['price'], cost_price))
             
         conn.commit()
-    return {"status": "success", "transaction_id": transaction_id}
+    return jsonify({"status": "success", "transaction_id": transaction_id})
 
-@app.get("/api/reports/sales")
+@app.route("/api/reports/sales", methods=["GET"])
 def get_sales_report():
     with get_db() as conn:
         conn.row_factory = sqlite3.Row
@@ -186,4 +129,4 @@ def get_sales_report():
             c.execute("SELECT * FROM transaction_items WHERE transaction_id = ?", (tx['id'],))
             tx['items'] = [dict(row) for row in c.fetchall()]
             
-        return transactions
+        return jsonify(transactions)
