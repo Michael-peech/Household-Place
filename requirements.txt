@@ -1,4 +1,2 @@
-fastapi
-uvicorn
-pydantic
-a2wsgi
+Flask
+Flask-Cors
