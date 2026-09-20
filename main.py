@@ -4,6 +4,7 @@ from pydantic import BaseModel
 import sqlite3
 from typing import Dict
 from datetime import datetime
+import os
 
 app = FastAPI()
 
@@ -15,10 +16,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-DB_NAME = "shop.db"
+# 1. ABSOLUTE PATH: Forces the DB to be created in the exact right folder
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DB_NAME = os.path.join(BASE_DIR, "shop.db")
 
 def init_db():
-    with sqlite3.connect(DB_NAME) as conn:
+    # Added a timeout so if it locks, it crashes with a visible error instead of freezing forever
+    with sqlite3.connect(DB_NAME, timeout=5) as conn:
         c = conn.cursor()
         
         c.execute('''
@@ -66,7 +70,15 @@ def init_db():
             c.executemany("INSERT INTO products (name, price, stock, cost_price, category, tags, image_data) VALUES (?, ?, ?, ?, ?, ?, ?)", sample_products)
         conn.commit()
 
-init_db()
+# 2. LAZY LOADING: We will safely call this on the first request rather than globally during boot
+db_initialized = False
+
+def get_db():
+    global db_initialized
+    if not db_initialized:
+        init_db()
+        db_initialized = True
+    return sqlite3.connect(DB_NAME, timeout=5)
 
 # --- Models ---
 class CartItem(BaseModel):
@@ -86,11 +98,15 @@ class ProductPayload(BaseModel):
     tags: str
     image_data: str
 
-# --- API Endpoints ---
+# --- NEW: Health Check Endpoint ---
+@app.get("/")
+def read_root():
+    return {"status": "Backend is ALIVE and running!"}
 
+# --- API Endpoints ---
 @app.get("/api/products")
 def get_products():
-    with sqlite3.connect(DB_NAME) as conn:
+    with get_db() as conn:
         conn.row_factory = sqlite3.Row
         c = conn.cursor()
         c.execute("SELECT * FROM products")
@@ -98,7 +114,7 @@ def get_products():
 
 @app.post("/api/products")
 def add_product(product: ProductPayload):
-    with sqlite3.connect(DB_NAME) as conn:
+    with get_db() as conn:
         c = conn.cursor()
         c.execute("INSERT INTO products (name, price, stock, cost_price, category, tags, image_data) VALUES (?, ?, ?, ?, ?, ?, ?)", 
                   (product.name, product.price, product.stock, product.cost_price, product.category, product.tags, product.image_data))
@@ -107,17 +123,16 @@ def add_product(product: ProductPayload):
 
 @app.put("/api/products/{product_id}")
 def update_product(product_id: int, product: ProductPayload):
-    with sqlite3.connect(DB_NAME) as conn:
+    with get_db() as conn:
         c = conn.cursor()
         c.execute("UPDATE products SET name = ?, price = ?, stock = ?, cost_price = ?, category = ?, tags = ?, image_data = ? WHERE id = ?",
                   (product.name, product.price, product.stock, product.cost_price, product.category, product.tags, product.image_data, product_id))
         conn.commit()
     return {"status": "success"}
 
-# NEW: Delete product endpoint
 @app.delete("/api/products/{product_id}")
 def delete_product(product_id: int):
-    with sqlite3.connect(DB_NAME) as conn:
+    with get_db() as conn:
         c = conn.cursor()
         c.execute("DELETE FROM products WHERE id = ?", (product_id,))
         conn.commit()
@@ -125,7 +140,7 @@ def delete_product(product_id: int):
 
 @app.post("/api/checkout")
 def checkout(payload: CartPayload):
-    with sqlite3.connect(DB_NAME) as conn:
+    with get_db() as conn:
         c = conn.cursor()
         
         total_amount = sum(item.price * item.quantity for item in payload.items.values())
@@ -160,7 +175,7 @@ def checkout(payload: CartPayload):
 
 @app.get("/api/reports/sales")
 def get_sales_report():
-    with sqlite3.connect(DB_NAME) as conn:
+    with get_db() as conn:
         conn.row_factory = sqlite3.Row
         c = conn.cursor()
         
