@@ -900,3 +900,94 @@ body {
     from { transform: translateX(100%); }
     to { transform: translateX(0); }
 }
+
+/* =========================================
+   COMPLETE MOBILE RESPONSIVENESS PATCH
+   ========================================= */
+@media (max-width: 768px) {
+    /* 1. App-Style Bottom Navigation Bar */
+    .navbar {
+        justify-content: center;
+        padding: 1rem;
+    }
+    .nav-links {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        width: 100%;
+        background: #ffffff;
+        box-shadow: 0 -4px 20px rgba(0,0,0,0.15);
+        justify-content: space-around;
+        padding: 0.8rem 0.5rem;
+        z-index: 1000;
+        gap: 0;
+        display: flex;
+    }
+    .nav-links button {
+        font-size: 0.75rem;
+        padding: 0.5rem;
+        border-radius: 8px;
+        flex: 1;
+        text-align: center;
+    }
+    main {
+        padding-bottom: 90px; /* Prevents content from hiding under the bottom bar */
+    }
+
+    /* 2. Storefront Grid */
+    .product-grid {
+        grid-template-columns: 1fr; /* 1 item per row on phones */
+    }
+
+    /* 3. Admin Panel Buttons (Full Width for Thumbs) */
+    .admin-header {
+        flex-direction: column;
+        align-items: stretch; /* Stretch buttons to full width */
+        gap: 1rem;
+    }
+    .admin-header > div {
+        flex-direction: column; /* Stack Import/Export buttons */
+        gap: 0.5rem;
+    }
+    .admin-header button {
+        width: 100%;
+        padding: 0.8rem;
+    }
+
+    /* 4. Scrollable Inventory Table */
+    .table-container {
+        overflow-x: auto; /* Allows swiping left/right on the table */
+        -webkit-overflow-scrolling: touch;
+        margin: 0 -1rem; /* Pulls table edges to the screen edge */
+        padding: 0 1rem;
+    }
+    .inventory-table {
+        min-width: 600px; /* Forces table to stay wide so it doesn't crush text */
+    }
+
+    /* 5. Modals (PIN Lock & Add Product) */
+    .modal-content {
+        width: 92%;
+        margin: 15% auto;
+        padding: 1.5rem;
+    }
+    .row-group {
+        flex-direction: column; /* Stacks Cost/Price inputs vertically */
+        gap: 1rem;
+    }
+
+    /* 6. Reports View */
+    .reports-header {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 1rem;
+    }
+    .reports-header button {
+        width: 100%;
+    }
+    .reports-overview {
+        flex-direction: column; /* Stacks Revenue and Profit labels */
+        align-items: flex-start;
+        gap: 0.5rem;
+    }
+}
